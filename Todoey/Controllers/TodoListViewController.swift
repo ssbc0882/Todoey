@@ -12,27 +12,17 @@ class TodoListViewController: UITableViewController {
     
     var itemArray = [Item]()
     
-    let defaults = UserDefaults.standard
+    //singelton
+    //also where your encodable and decodable data goes to: the saved data is in a plist file
+    let dataFilePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("Items.plist")
 
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        let newItem = Item()
-        newItem.title = "Find Mike"
-        itemArray.append(newItem)
+        print(dataFilePath)
         
-        let newItem2 = Item()
-        newItem2.title = "Buy Eggos"
-        itemArray.append(newItem2)
+            loadItems()
         
-        let newItem3 = Item()
-        newItem3.title = "Defeat Demogorgon"
-        itemArray.append(newItem3)
-        
-        if let items = defaults.array(forKey: "ToDoListArray") as? [Item] {
-
-            itemArray = items
-        }
     }
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
@@ -61,7 +51,7 @@ class TodoListViewController: UITableViewController {
         
         itemArray[indexPath.row].done = !itemArray[indexPath.row].done
         
-        tableView.reloadData()
+        saveItems()
     
         tableView.deselectRow(at: indexPath, animated: true)
     }
@@ -82,12 +72,9 @@ class TodoListViewController: UITableViewController {
             
            self.itemArray.append(newItem)
             
-            //saves data and adds item to our itemArray w/ the userdefault
-            self.defaults.set(self.itemArray, forKey: "ToDoListArray")
-            
-            self.tableView.reloadData()
-            
+            self.saveItems()
         }
+           
         
         alert.addTextField { (alertTextField) in
             
@@ -100,5 +87,37 @@ class TodoListViewController: UITableViewController {
         present(alert, animated: true, completion: nil)
     }
     
+    //Mark - Model Manipulation Methods
+    
+    //encoding our  data of a list of items into a plist
+    func saveItems () {
+        
+        let encoder = PropertyListEncoder()
+        
+        do {
+            let data = try encoder.encode(itemArray)
+            try data.write(to: dataFilePath!)
+        } catch {
+            print("Error encoding itemArray, \(error)")
+        }
+        self.tableView.reloadData()
+        
+        }
+    
+    //we decode the data and take out that list of items
+    func loadItems() {
+        
+        if let data = try? Data(contentsOf: dataFilePath!) {
+            //decodes your items
+            let decoder = PropertyListDecoder()
+            do {
+                itemArray = try decoder.decode([Item].self, from: data)
+                
+            }catch {
+                print("Error decoding data \(error)")
+            }
+            
+        }
+    }
 }
 
