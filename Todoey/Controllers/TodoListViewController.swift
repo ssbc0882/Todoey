@@ -7,24 +7,34 @@
 //
 
 import UIKit
+import CoreData
 
 class TodoListViewController: UITableViewController {
     
     var itemArray = [Item]()
     
-    //singelton
-    //also where your encodable and decodable data goes to: the saved data is in a plist file
-    let dataFilePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("Items.plist")
+    var selectedCategory : Category? {
+        
+        didSet{
+           
+            loadItems()
+        }
+    }
+    
+    let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
+    
+  
 
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        print(dataFilePath)
+            print(FileManager.default.urls(for: .documentDirectory, in: .userDomainMask))
         
-            loadItems()
-        
+    
     }
+        
 
+    //Mark: Tableview Datasource Methods
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         return itemArray.count
     }
@@ -47,7 +57,10 @@ class TodoListViewController: UITableViewController {
     
     //tableview delegate method - tells delegate row is selected
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        //print (itemArray[indexPath.row])
+     
+//            context.delete(itemArray[indexPath.row])
+//            itemArray.remove(at: indexPath.row)
+        
         
         itemArray[indexPath.row].done = !itemArray[indexPath.row].done
         
@@ -67,8 +80,14 @@ class TodoListViewController: UITableViewController {
             
             //what will happen once the user clicks the Add button on our UIAlert
           
-            let newItem = Item()
+            //UI app singleton instance
+            
+            
+            let newItem = Item(context: self.context)
             newItem.title = textField.text!
+            newItem.done = false
+            //if item is related to the selected category
+            newItem.parentCategory = self.selectedCategory
             
            self.itemArray.append(newItem)
             
@@ -92,32 +111,67 @@ class TodoListViewController: UITableViewController {
     //encoding our  data of a list of items into a plist
     func saveItems () {
         
-        let encoder = PropertyListEncoder()
+        
         
         do {
-            let data = try encoder.encode(itemArray)
-            try data.write(to: dataFilePath!)
+            try context.save()
         } catch {
-            print("Error encoding itemArray, \(error)")
+            print("error saving context \(error)")
         }
         self.tableView.reloadData()
         
         }
     
-    //we decode the data and take out that list of items
-    func loadItems() {
+    //we decode the data and take out that list of items.
+    //Item.fetchrequest() is the default value if the data doesn't return the first value
+    func loadItems(with request: NSFetchRequest<Item> = Item.fetchRequest(), predicate: NSPredicate? = nil) {
         
-        if let data = try? Data(contentsOf: dataFilePath!) {
-            //decodes your items
-            let decoder = PropertyListDecoder()
-            do {
-                itemArray = try decoder.decode([Item].self, from: data)
+        let categoryPredicate = NSPredicate(format: "parentCategory.name MATCHES %@", selectedCategory!.name!)
+
+        
+        if let additionalPredicate = predicate {
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [categoryPredicate, additionalPredicate])
+        } else {
+            request.predicate = categoryPredicate
+        }
+        
+        do {
+           itemArray = try context.fetch(request)
+        } catch {
+            print("error fetching data \(error)")
+        }
+    }
+    
+    
+}
+
+//Mark- search bar methods
+
+extension TodoListViewController: UISearchBarDelegate {
+    
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        let request : NSFetchRequest<Item> = Item.fetchRequest()
+        
+        request.predicate = NSPredicate(format: "title CONTAINS[cd] %@", searchBar.text! )
+        
+        request.sortDescriptors = [NSSortDescriptor(key: "title", ascending: true)]
+        
+        loadItems(with: request)
+    }
+    
+    func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        
+        if searchBar.text?.count == 0 {
+            
+            loadItems()
+            
+            //ask dispatch to get the main queue
+            DispatchQueue.main.async {
                 
-            }catch {
-                print("Error decoding data \(error)")
+                //no longer the thing being used. Gets rid of keyboard
+                searchBar.resignFirstResponder()
             }
             
         }
     }
 }
-
